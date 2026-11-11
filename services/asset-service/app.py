@@ -23,10 +23,16 @@ app = create_app()
 
 @app.route("/api/v1/assets/health", methods=["GET"])
 def health():
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        db_status = "unreachable"
     return jsonify({
-        "status": "healthy",
+        "service status": "healthy",
         "service": "asset-service",
-        "language": "python"
+        "language": "python",
+        "database status": db_status
     }), 200
 
 @app.route("/api/v1/assets/add-asset", methods=["POST"])
