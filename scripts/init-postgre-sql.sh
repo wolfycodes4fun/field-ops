@@ -8,7 +8,7 @@ set -e
 psql -v ON_ERROR_STOP=1 \
     --username "${POSTGRES_USER}" \
     -v db_user="${DB_USER}" -v db_password="${DB_PASSWORD}" \
-    -v asset_database="${ASSET_DATABASE_NAME}" \
-    -v work_order_database="${WORK_ORDER_DATABASE}" \
-    -v workforce_database="${workforce_database}" \
+    -v asset_database="${ASSET_DB_NAME}" \
+    -v work_order_database="${WORK_ORDER_DB_NAME}" \
+    -v workforce_database="${WORKFORCE_DB_NAME}" \
     -f /tmp/db_scripts/init.sql
