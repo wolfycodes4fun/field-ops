@@ -1,0 +1,17 @@
+---
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ASSET_DB_NAME: ${ASSET_DB_NAME}
+      WORK_ORDER_DB_NAME: ${WORK_ORDER_DB_NAME}
+      WORKFORCE_DB_NAME: ${WORKFORCE_DB_NAME}
+    ports:
+      - 5432:5432
+    volumes:
+      - ./scripts/init.sql:/tmp/db_scripts/init.sql
+      - ./scripts/init-postgre-sql.sh:/docker-entrypoint-initdb.d/init-postgre-sql.sh
