@@ -1,9 +1,11 @@
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 from dotenv import load_dotenv
+
 from models import Asset
 from extensions import db, migrate
+from utils import validate_asset_payload
 
 import os
 
@@ -37,7 +39,10 @@ def health():
 
 @app.route("/api/v1/assets/add-asset", methods=["POST"])
 def add_assets():
-    pass
+    data = request.get_json()
+    values, error = validate_asset_payload(data)
+
+    return values
 
 if __name__ == "__main__":
     app.run("0.0.0.0", port=5010, debug=True)
