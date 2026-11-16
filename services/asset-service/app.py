@@ -14,9 +14,9 @@ def create_app():
     app = Flask(__name__)
 
     app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql+psycopg://{os.getenv("DB_USER")}:{os.getenv("DB_PASSWORD")}@{os.getenv("DB_HOST")}:5432/assets"
+
     db.init_app(app)
     migrate.init_app(app, db)
-
     return app
 
 app = create_app()

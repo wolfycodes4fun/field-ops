@@ -1,4 +1,4 @@
-from sqlalchemy import Column, UUID, String, Text, DateTime, func
+from sqlalchemy import UUID, String, Text, DateTime, func
 from extensions import db
 
 import uuid
