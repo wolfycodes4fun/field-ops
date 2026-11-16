@@ -1,9 +1,17 @@
 # Asset Service
 
+Initally, run only ONCE:  
+    cd services/asset-service/  
+    bash scripts/migrate-schema.sh  
+
 To run service, execute command:  
     python services/asset-service/app.py
 
 # Workforce Service  
+
+Initially, run only ONCE:  
+    cd services/workforce-service/  
+    bash scripts/migrate-schema.sh  
 
 To run service, execute command:  
     python services/workforce-service/app.py  
@@ -17,5 +25,4 @@ Databases can be connected to on port 5432!
 # Omitting Docker Compose  
 
 To run the setup without using Docker Compose, execute command (from project root):  
-    bash scripts/migrate_schemas.sh  
     bash scripts/postgres-init.sh
