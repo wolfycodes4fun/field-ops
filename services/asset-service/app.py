@@ -30,7 +30,14 @@ def health():
         db.session.execute(db.text("SELECT 1"))
         db_status = "connected"
     except Exception as e:
-        db_status = "unreachable"
+
+        return jsonify({
+            "service status": "healthy",
+            "service": "asset-service",
+            "language": "python",
+            "database status": "unreachable"
+        }), 500
+
     return jsonify({
         "service status": "healthy",
         "service": "asset-service",
