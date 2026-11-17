@@ -57,5 +57,27 @@ def add_assets():
 
     return jsonify(asset_to_dictionary(asset)), 201
 
+@app.route("/api/v1/assets/<uuid:asset_id>", methods=["PUT"])
+def update_assets(asset_id):
+    data = request.get_json()
+    values, error = validate_asset_payload(data, True)
+
+    if error:
+        return jsonify({
+            "code": "invalid_request",
+            "message": error
+        }), 400
+
+    asset = db.session.get(Asset, asset_id)
+    for property, value in values.items():
+        setattr(asset, property, value)
+
+    try:
+        commit_asset(asset)
+    except SQLAlchemyError as e:
+        return database_error_response(e)
+
+    return jsonify(asset_to_dictionary(asset)), 201
+
 if __name__ == "__main__":
     app.run("0.0.0.0", port=5010, debug=True)

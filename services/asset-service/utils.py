@@ -11,9 +11,9 @@ def validate_asset_payload(data: dict, is_update: bool):
     if not isinstance(data, dict):
         return None, "Request body must be a JSON object"
 
-    unknown_fields = list(ALL_FIELDS - set(data.keys()))
-    if unknown_fields:
-        return None, f"Unknown fields: ({", ".join(unknown_fields)})"
+    # unknown_fields = list(ALL_FIELDS - set(data.keys()))
+    # if unknown_fields:
+    #     return None, f"Unknown fields: ({", ".join(unknown_fields)})"
 
     if not is_update:
         missing_fields = list(REQUIRED_FIELDS - set(data.keys()))
