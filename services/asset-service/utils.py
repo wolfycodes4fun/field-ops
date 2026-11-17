@@ -1,3 +1,9 @@
+from flask import jsonify
+from sqlalchemy.exc import IntegrityError, OperationalError
+
+from extensions import db
+from models import Asset
+
 REQUIRED_FIELDS = {"name", "category", "location"}
 ALL_FIELDS = {"name", "category", "location", "description"}
 
@@ -21,7 +27,43 @@ def validate_asset_payload(data: dict, is_update: bool):
     for property, value in data.items():
         if not isinstance(value, str):
             return None, f"Value for property {property} must be of type String"
-        else:
+        if property in ALL_FIELDS:
             verified_data[property] = value.strip()
 
     return verified_data, None
+
+def commit_asset(asset):
+    db.session.add(asset)
+    db.session.commit()
+    db.session.refresh(asset)
+
+def database_error_response(error):
+    db.session.rollback()
+
+    if isinstance(error, IntegrityError):
+        return jsonify({
+            "code": "asset_conflict",
+            "message": "Asset conflicts with an existing record"
+        }), 409
+
+    if isinstance(error, OperationalError):
+        return jsonify({
+            "code": "database_unavailable",
+            "message": "The database service is temporarily unavailable"
+        }), 503
+
+    return jsonify({
+        "code": "database_error",
+        "message": str(error)
+    }), 500
+
+def asset_to_dictionary(asset: Asset):
+    return {
+        "id": str(asset.id),
+        "name": asset.name,
+        "category": asset.category,
+        "location": asset.location,
+        "description": asset.description,
+        "created_at": asset.created_at,
+        "updated_at": asset.updated_at
+    }

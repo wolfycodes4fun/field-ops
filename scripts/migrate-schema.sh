@@ -12,7 +12,7 @@ source ../../venv/Scripts/activate
 python -m pip install -r ../../requirements.txt
 
 # Needs to be run once to initialize the migration repository (EXACTLY ONCE & NEVER AGAIN)
-# python -m flask --app app db init
+python -m flask --app app db init
 
 # Updates the /migrations folder with incoming changes
 python -m flask --app app db migrate -m "${COMMIT_MESSAGE}"

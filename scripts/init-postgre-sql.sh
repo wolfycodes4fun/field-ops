@@ -7,6 +7,7 @@ set -e
 
 psql -v ON_ERROR_STOP=1 \
     --username "${POSTGRES_USER}" \
+    --dbname "${POSTGRES_USER}" \
     -v db_user="${DB_USER}" -v db_password="${DB_PASSWORD}" \
     -v asset_database="${ASSET_DB_NAME}" \
     -v work_order_database="${WORK_ORDER_DB_NAME}" \

@@ -1,11 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
 from dotenv import load_dotenv
 
 from models import Asset
 from extensions import db, migrate
-from utils import validate_asset_payload
+from utils import validate_asset_payload, commit_asset, database_error_response, asset_to_dictionary
 
 import os
 
@@ -37,12 +38,24 @@ def health():
         "database status": db_status
     }), 200
 
-@app.route("/api/v1/assets/add-asset", methods=["POST"])
+@app.route("/api/v1/assets/", methods=["POST"])
 def add_assets():
     data = request.get_json()
-    values, error = validate_asset_payload(data)
+    values, error = validate_asset_payload(data, False)
 
-    return values
+    if error:
+        return jsonify(error={
+            "code": "invalid_requests",
+            "message": error
+            }), 400
+    asset = Asset(**values)
+
+    try:
+        commit_asset(asset)
+    except SQLAlchemyError as e:
+        return database_error_response(e)
+
+    return jsonify(asset_to_dictionary(asset)), 201
 
 if __name__ == "__main__":
     app.run("0.0.0.0", port=5010, debug=True)
