@@ -1,5 +1,6 @@
 flask==3.1.3
-Flask-SQLAlchemy
-Flask-Migrate
+flask-bcrypt==1.0.1
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.1.0
 psycopg[binary]
-dotenv
+dotenv==0.9.9

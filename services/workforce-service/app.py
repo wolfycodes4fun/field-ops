@@ -1,10 +1,13 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import bcrypt
+from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
 from dotenv import load_dotenv
 
 from models import Workforce
 from extensions import db, migrate
+from utils import hash_password, validate_user_payload, commit_to_database, database_error_response, asset_to_dictionary
 
 import os
 
@@ -34,6 +37,30 @@ def health():
         "language": "python",
         "database status": db_status
     }), 200
+
+@app.route("/api/v1/workforce/add-user", methods=["POST"])
+def create_user():
+    data = request.get_json()
+
+    # Validate data & hash password
+    if data["password"]:
+        data["password_hash"] = hash_password(data["password"])
+    verified_data, error = validate_user_payload(data)
+
+    if error:
+        return jsonify({
+            "code": "invalid_object",
+            "message": str(error)
+        }), 400
+
+    # Unpacks payload to a Workforce object
+    user = Workforce(**verified_data)
+    try:
+        commit_to_database(user)
+    except SQLAlchemyError as e:
+        return database_error_response(e)
+
+    return jsonify(asset_to_dictionary(user)), 201
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
