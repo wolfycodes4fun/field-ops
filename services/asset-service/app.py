@@ -57,7 +57,7 @@ def add_assets():
 
     return jsonify(asset_to_dictionary(asset)), 201
 
-@app.route("/api/v1/assets/<uuid:asset_id>", methods=["PUT"])
+@app.route("/api/v1/assets/<uuid:asset_id>", methods=["PATCH"])
 def update_assets(asset_id):
     data = request.get_json()
     values, error = validate_asset_payload(data, True)
