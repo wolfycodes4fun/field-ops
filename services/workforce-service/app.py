@@ -30,7 +30,13 @@ def health():
         db.session.execute(db.text("SELECT 1"))
         db_status = "connected"
     except Exception as e:
-        db_status = "disconnected"
+        return jsonify({
+            "service status": "healthy",
+            "service": "workforce-service",
+            "language": "python",
+            "database status": "disconnected"
+        }), 500
+
     return jsonify({
         "service status": "healthy",
         "service": "workforce-service",
