@@ -69,6 +69,13 @@ def update_assets(asset_id):
         }), 400
 
     asset = db.session.get(Asset, asset_id)
+
+    if not asset:
+        return jsonify({
+            "code": "invalid_object",
+            "message": "Asset does not currently exist in the system"
+        })
+
     for property, value in values.items():
         setattr(asset, property, value)
 
