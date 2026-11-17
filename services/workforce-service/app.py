@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 from dotenv import load_dotenv
 
+from models import Workforce
 from extensions import db, migrate
 
 import os
