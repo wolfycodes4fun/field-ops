@@ -68,5 +68,27 @@ def create_user():
 
     return jsonify(asset_to_dictionary(user)), 201
 
+@app.route("/api/v1/workforce/auth/token", methods=["POST"])
+def grant_token():
+    data = request.get_json()
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "code": "invalid_request",
+            "message": "Request body must be a JSON object."
+        }), 400
+
+    email = data.get("email")
+    password = data.get("password")
+
+    if (not isinstance(email, str) or not email) or (not isinstance(password, str) or not password):
+        return jsonify({
+            "code": "invalid_request",
+            "message": "Both 'email' and 'password' fields are mandatory!"
+        }), 400
+
+    query = db.select(Workforce).where(Workforce.email == email)
+    user = db.session.execute(query).scalar_one_or_none
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
