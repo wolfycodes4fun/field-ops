@@ -3,7 +3,6 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import bcrypt
 from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 import os
@@ -11,7 +10,16 @@ import jwt
 
 from models import Workforce
 from extensions import db, migrate
-from utils import hash_password, validate_user_payload, commit_to_database, database_error_response, asset_to_dictionary
+from utils import (
+    hash_password, 
+    validate_user_payload, 
+    commit_to_database, 
+    database_error_response, 
+    asset_to_dictionary,
+    grant_token,
+    verify_jwt_token,
+    require_roles
+)
 
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -21,8 +29,8 @@ def create_app():
 
     app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql+psycopg://{os.getenv("DB_USER")}:{os.getenv("DB_PASSWORD")}@{os.getenv("DB_HOST")}:5432/workforce"
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
-    app.config["JWT_ISSUER"] = "fieldops-workforce"
-    app.config["JWT_AUDIENCE"] = "fieldops"
+    app.config["JWT_ISSUER"] = os.getenv("WORKFORCE_JWT_ISSUER")
+    app.config["JWT_AUDIENCE"] = os.getenv("WORKFORCE_JWT_AUDIENCE")
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -51,6 +59,7 @@ def health():
     }), 200
 
 @app.route("/api/v1/workforce/add-user", methods=["POST"])
+@require_roles("Admin")
 def create_user():
     data = request.get_json()
 
@@ -74,8 +83,8 @@ def create_user():
 
     return jsonify(asset_to_dictionary(user)), 201
 
-@app.route("/api/v1/workforce/auth/token", methods=["POST"])
-def grant_token():
+@app.route("/api/v1/workforce/login", methods=["POST"])
+def user_login():
     data = request.get_json()
 
     if not isinstance(data, dict):
@@ -87,7 +96,7 @@ def grant_token():
     email = data.get("email")
     password = data.get("password")
 
-    if (not isinstance(email, str) or not email) or (not isinstance(password, str) or not password):
+    if ((not isinstance(email, str) or not email) or (not isinstance(password, str) or not password)):
         return jsonify({
             "code": "invalid_request",
             "message": "Both 'email' and 'password' fields are mandatory!"
@@ -97,7 +106,6 @@ def grant_token():
         query = db.select(Workforce).where(Workforce.email == email)
         user: Workforce = db.session.execute(query).scalar_one_or_none()
     except SQLAlchemyError as e:
-        db.session.rollback()
         return database_error_response(e)
 
     if not user or not user.is_active or not bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8")):
@@ -106,24 +114,48 @@ def grant_token():
             "message": "Email or password is incorrect"
         }), 401
 
-    token = jwt.encode(
-        {
-            "sub": str(user.id),
-            "role": user.role,
-            "iat": datetime.now(timezone.utc), # Records when token was created
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=15), # Records when token needs to expire
-            "iss": current_app.config["JWT_ISSUER"],
-            "aud": current_app.config["JWT_AUDIENCE"]
-        },
-        current_app.config["JWT_SECRET_KEY"],
-        algorithm="HS256"
-    )
-
+    auth_token = grant_token(user, current_app)
     return jsonify({
-        "access_token": token,
+        "access_token": auth_token,
         "token_type": "Bearer",
         "expires_in": 900
     }), 200
+
+@app.route("/api/v1/workforce/me", methods=["GET"])
+def whoami():
+    auth_header = request.headers.get("Authorization", "")
+    scheme, _, jwt_token = auth_header.partition(" ")
+
+    if scheme.lower() != "bearer" or not jwt_token:
+        return jsonify({
+            "code": "unauthorized_request",
+            "message": "A Bearer access token is required to carry this function!"
+        }), 401
+
+    jwt_token = verify_jwt_token(jwt_token)
+    if jwt_token:
+        return jsonify({
+            "code": "unauthorized_request",
+            "message": "The Bearer token is expired or invalid!"
+        }), 401
+    user_id = jwt_token.get("sub")
+
+    try:
+        user = db.session.get(Workforce, user_id)
+        if user is not None and user.is_active:
+            return jsonify({
+                "id": user.id,
+                "email": user.email,
+                "display_name": user.display_name,
+                "role": user.role
+            }), 200
+        else: 
+            return jsonify({
+                "code": "unauthorized_request",
+                "message": "User is unavailable"
+            }), 401
+    except SQLAlchemyError as e:
+        return database_error_response(e)
 
 
 
