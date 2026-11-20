@@ -14,7 +14,7 @@ from utils import (
     validate_user_payload, 
     commit_to_database, 
     database_error_response, 
-    asset_to_dictionary,
+    user_to_dictionary,
     grant_token,
     verify_jwt_token,
     require_roles
@@ -80,7 +80,7 @@ def create_user():
     except SQLAlchemyError as e:
         return database_error_response(e)
 
-    return jsonify(asset_to_dictionary(user)), 201
+    return jsonify(user_to_dictionary(user)), 201
 
 @app.route("/api/v1/workforce/login", methods=["POST"])
 def user_login():
@@ -156,7 +156,7 @@ def whoami():
     except SQLAlchemyError as e:
         return database_error_response(e)
 
-@app.route("/api/v1/workforce/<uuid:user_id>", methods=["GET"])
+@app.route("/api/v1/workforce/users/<uuid:user_id>", methods=["GET"])
 @require_roles("Admin", "Manager")
 def search_user(user_id):
     try:
@@ -178,6 +178,35 @@ def search_user(user_id):
         "is_active": user.is_active,
         "created_at": user.created_at
     })
+
+@app.route("/api/v1/workforce/users/<uuid:user_id>", methods=["PATCH"])
+@require_roles("Admin", "Manager")
+def update_user_details(user_id):
+    data = request.get_json()
+    verified_data, error = validate_user_payload(data, True)
+
+    if error:
+        return jsonify({
+            "code": "invalid_request",
+            "message": str(error)
+        }), 400
+
+    try:
+        user = db.session.get(Workforce, user_id)
+        if user is None:
+            return jsonify({
+                "code": "user_unavailable",
+                "message": "The requested user is not available"
+            }), 404
+        
+        for property, value in verified_data.items():
+            setattr(user, property, value)
+
+        commit_to_database(user)
+    except SQLAlchemyError as e:
+        return database_error_response(e)
+
+    return jsonify(user_to_dictionary(user)), 201
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

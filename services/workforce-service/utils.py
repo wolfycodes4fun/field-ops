@@ -16,13 +16,17 @@ def hash_password(password: str):
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
-def validate_user_payload(data: dict):
+def validate_user_payload(data: dict, is_update: bool = False):
     if not isinstance(data, dict):
         return None, "Request body must be a JSON object"
 
-    missing_fields = list(REQUIRED_FIELDS - set(data.keys()))
-    if missing_fields:
-        return None, f"Required fields for creating users missing: {", ".join(missing_fields)}"
+    if not is_update:
+        missing_fields = list(REQUIRED_FIELDS - set(data.keys()))
+        if missing_fields:
+            return None, f"Required fields for creating users missing: {", ".join(missing_fields)}"
+
+    if is_update and not data:
+        return  None, f"Provide at least one property from {list(ALL_FIELDS)} to update user"
 
     verified_data = {}
     for property, value in data.items():
@@ -30,7 +34,7 @@ def validate_user_payload(data: dict):
             return None, f"Value for {property} must be of type string!"
         if property == "is_active" and not isinstance(value, bool):
             return None, f"Value for {property} must be of type boolean!"
-        if property in ALL_FIELDS and property != "password":
+        if property in ALL_FIELDS and property != "password_hash":
             verified_data[property] = value
 
     return verified_data, None
@@ -60,7 +64,7 @@ def database_error_response(e: SQLAlchemyError):
         "message": str(e)
     }), 500
 
-def asset_to_dictionary(user: Workforce):
+def user_to_dictionary(user: Workforce):
     return {
         "id": str(user.id),
         "email": user.email,
