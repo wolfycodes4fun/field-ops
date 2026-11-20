@@ -1,5 +1,6 @@
 from flask import jsonify, request
 from flask_bcrypt import bcrypt
+from functools import wraps
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError
 from datetime import datetime, timezone, timedelta
 
@@ -102,6 +103,7 @@ def verify_jwt_token(jwt_token):
 
 def require_roles(*allowed_roles: str):
     def inner_func(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             auth_header = request.headers.get("Authorization", "")
             scheme, _, jwt_token = auth_header.partition(" ")
