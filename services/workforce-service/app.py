@@ -6,7 +6,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 import os
-import jwt
 
 from models import Workforce
 from extensions import db, migrate
@@ -157,7 +156,28 @@ def whoami():
     except SQLAlchemyError as e:
         return database_error_response(e)
 
+@app.route("/api/v1/workforce/<uuid:user_id>", methods=["GET"])
+@require_roles("Admin", "Manager")
+def search_user(user_id):
+    try:
+        user: Workforce = db.session.get(Workforce, user_id)
+    except SQLAlchemyError as e:
+        return database_error_response(e)
 
+    if user is None:
+        return jsonify({
+            "code": "user_not_found",
+            "message": "User is not available"
+        }), 404
+
+    return jsonify({
+        "id": str(user.id),
+        "email": user.email,
+        "display_name": user.display_name,
+        "role": user.role,
+        "is_active": user.is_active,
+        "created_at": user.created_at
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
