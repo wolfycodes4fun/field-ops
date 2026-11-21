@@ -10,12 +10,25 @@ import os
 from extensions import db
 from models import Workforce
 
-ALL_FIELDS = {"email", "display_name", "password_hash", "role", "is_active"}
-REQUIRED_FIELDS = {"email", "display_name", "password", "role"}
+EDITABLE_FIELDS = {"email", "display_name", "role", "is_active"}
+REQUIRED_FIELDS = {"email", "display_name", "role"}
 
-def hash_password(password: str):
+def hash_and_check_password_constraints(password):
+
+    password_min_length = 10
+    password_max_length = 64
+
+    if (not isinstance(password, str) or
+        len(password) < password_min_length or
+        len(password) > password_max_length or
+        not any(ch.isupper() for ch in password) or
+        not any(ch.islower() for ch in password) or
+        not any(ch.isdigit() for ch in password)
+        ):
+        return None, f"Please pass a password of length between {password_min_length} and {password_max_length} with a mix of lowercase, uppercase and number characters"
+
     salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8'), None
 
 def validate_user_payload(data: dict, is_update: bool = False):
     if not isinstance(data, dict):
@@ -27,7 +40,7 @@ def validate_user_payload(data: dict, is_update: bool = False):
             return None, f"Required fields for creating users missing: {", ".join(missing_fields)}"
 
     if is_update and not data:
-        return  None, f"Provide at least one property from {list(ALL_FIELDS)} to update user"
+        return  None, f"Provide at least one property from {list(EDITABLE_FIELDS)} to update user"
 
     verified_data = {}
     for property, value in data.items():
@@ -37,7 +50,11 @@ def validate_user_payload(data: dict, is_update: bool = False):
             return None, f"Value for {property} must be of type boolean!"
         if property == "role":
             verified_data[property] = value.lower()
-        if property in ALL_FIELDS and property != "password_hash" and property != "role":
+        if (property in EDITABLE_FIELDS or
+            property != "role" or
+            property == "password_hash"
+            ):
+
             verified_data[property] = value
 
     return verified_data, None

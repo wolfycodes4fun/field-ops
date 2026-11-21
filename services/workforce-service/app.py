@@ -11,7 +11,7 @@ import os
 from models import Workforce
 from extensions import db, migrate
 from utils import (
-    hash_password, 
+    hash_and_check_password_constraints, 
     validate_user_payload, 
     commit_to_database, 
     database_error_response, 
@@ -64,15 +64,21 @@ def create_user():
     data = request.get_json()
 
     # Validate data & hash password
-    if data["password"]:
-        data["password_hash"] = hash_password(data["password"])
-    verified_data, error = validate_user_payload(data)
+    password = data.pop("password", None)
+    data["password_hash"], password_err = hash_and_check_password_constraints(password)
+    if password_err:
+        return jsonify({
+            "code": "invalid_request",
+            "message": password_err
+        }), 400
 
+    verified_data, error = validate_user_payload(data)
     if error:
         return jsonify({
             "code": "invalid_object",
             "message": str(error)
         }), 400
+    print(verified_data)
 
     # Unpacks payload to a Workforce object
     user = Workforce(**verified_data)
