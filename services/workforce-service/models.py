@@ -13,9 +13,9 @@ from extensions import db
 
 class Workforce(db.Model):
     __tablename__ = "workforces"
-    __tableargs__ = (
+    __table_args__ = (
         CheckConstraint(
-            "role IN ('admin', 'manager', 'technician')",
+            "role IN ('administrator', 'manager', 'technician')",
             name="check_user_roles"
         ),
     )

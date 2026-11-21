@@ -59,7 +59,7 @@ def health():
     }), 200
 
 @app.route("/api/v1/workforce/users", methods=["POST"])
-@require_roles("Admin")
+@require_roles("administrator")
 def create_user():
     data = request.get_json()
 
@@ -158,7 +158,7 @@ def whoami():
         return database_error_response(e)
 
 @app.route("/api/v1/workforce/users", methods=["GET"])
-@require_roles("Admin", "Manager")
+@require_roles("administrator", "manager")
 def search_and_filter_users():
     try:
         limit = int(request.args.get("limit", 20))
@@ -194,7 +194,6 @@ def search_and_filter_users():
             }), 400
         if match_email_or_name:
             pattern = f"%{match_email_or_name.strip()}%"
-            print("lol" + pattern)
             stmt = stmt.where(or_(
                 Workforce.display_name.ilike(pattern),
                 Workforce.email.ilike(pattern)
@@ -228,7 +227,7 @@ def search_and_filter_users():
         return database_error_response(e)
 
 @app.route("/api/v1/workforce/users/<uuid:user_id>", methods=["GET"])
-@require_roles("Admin", "Manager")
+@require_roles("administrator", "manager")
 def view_user(user_id):
     try:
         user: Workforce = db.session.get(Workforce, user_id)
@@ -251,7 +250,7 @@ def view_user(user_id):
     })
 
 @app.route("/api/v1/workforce/users/<uuid:user_id>", methods=["PATCH"])
-@require_roles("Admin")
+@require_roles("administrator")
 def update_user_details(user_id):
     data = request.get_json()
     verified_data, error = validate_user_payload(data, True)

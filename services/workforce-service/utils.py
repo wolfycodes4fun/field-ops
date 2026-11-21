@@ -35,7 +35,9 @@ def validate_user_payload(data: dict, is_update: bool = False):
             return None, f"Value for {property} must be of type string!"
         if property == "is_active" and not isinstance(value, bool):
             return None, f"Value for {property} must be of type boolean!"
-        if property in ALL_FIELDS and property != "password_hash":
+        if property == "role":
+            verified_data[property] = value.lower()
+        if property in ALL_FIELDS and property != "password_hash" and property != "role":
             verified_data[property] = value
 
     return verified_data, None
