@@ -8,14 +8,13 @@ from dotenv import load_dotenv
 
 import os
 
-from models import User
+from models import User, StaffProfile
 from extensions import db, migrate
 from utils import (
     hash_and_check_password_constraints, 
-    validate_user_payload, 
-    commit_to_database, 
-    database_error_response, 
-    user_to_dictionary,
+    validate_user_payload,
+    database_error_response,
+    return_user_details,
     grant_token,
     verify_jwt_token,
     require_roles
@@ -62,7 +61,8 @@ def health():
 def create_sudo_users():
     # A temp API route to add the initial admin & manager user/s
     data = request.get_json()
-
+    
+    # Validate data & hash password
     password = data.pop("password", None)
     data["password_hash"], password_err = hash_and_check_password_constraints(password)
     if password_err:
@@ -77,15 +77,25 @@ def create_sudo_users():
             "code": "invalid_object",
             "message": str(error)
         }), 400
-    print(verified_data)
     
-    user = User(**verified_data)
+    user_data = {key:value for key, value in verified_data.items() if key != "profile"}
+    profile_data = verified_data.get("profile")
+    
     try:
-        commit_to_database(user)
+        # Unpacks user_data to a User object
+        user = User(**user_data)
+        db.session.add(user)
+        db.session.flush()
+    
+        # Unpacks profile_data to a StaffProfiles object
+        profile = StaffProfile(user_id=user.id, **profile_data)
+        db.session.add(profile)
+    
+        db.session.commit()
     except SQLAlchemyError as e:
         return database_error_response(e)
     
-    return jsonify(user_to_dictionary(user)), 201
+    return jsonify(return_user_details(user, profile)), 201
     
 
 @app.route("/api/v1/workforce/users", methods=["POST"])
@@ -108,16 +118,24 @@ def create_user():
             "code": "invalid_object",
             "message": str(error)
         }), 400
-    print(verified_data)
 
-    # Unpacks payload to a User object
-    user = User(**verified_data)
+    user_data = {key:value for key, value in verified_data.items() if key != "profile"}
+    profile_data = verified_data.get("profile")
+    # Unpacks user_data to a User object
+    user = User(**user_data)
     try:
-        commit_to_database(user)
+        db.session.add(user)
+        db.session.flush()
+
+        # Unpacks profile_data to a StaffProfiles object
+        profile = StaffProfile(user_id=user.id, **profile_data)
+        db.session.add(profile)
+
+        db.session.commit()
     except SQLAlchemyError as e:
         return database_error_response(e)
 
-    return jsonify(user_to_dictionary(user)), 201
+    return jsonify(return_user_details(user, profile)), 201
 
 @app.route("/api/v1/workforce/login", methods=["POST"])
 def user_login():
@@ -276,24 +294,23 @@ def search_and_filter_users():
 @require_roles("administrator", "manager")
 def view_user(user_id):
     try:
-        user: User = db.session.get(User, user_id)
+        user = db.session.get(User, user_id)
+        if user is None:
+            return jsonify({
+                "code": "user_unavailable",
+                "message": "The requested user is not available"
+            }), 404
+        
+        profile = db.session.execute(db.select(StaffProfile).where(StaffProfile.user_id == user_id)).scalar_one_or_none()
+        if profile is None:
+            return jsonify({
+                "code": "profile_unavailable",
+                "message": "The requested profile is not available"
+            }), 404
     except SQLAlchemyError as e:
         return database_error_response(e)
 
-    if user is None:
-        return jsonify({
-            "code": "user_not_found",
-            "message": "User is not available"
-        }), 404
-
-    return jsonify({
-        "id": str(user.id),
-        "email": user.email,
-        "display_name": user.display_name,
-        "role": user.role,
-        "is_active": user.is_active,
-        "created_at": user.created_at
-    })
+    return jsonify(return_user_details(user, profile)), 201
 
 @app.route("/api/v1/workforce/users/<uuid:user_id>", methods=["PATCH"])
 @require_roles("administrator")
@@ -318,11 +335,59 @@ def update_user_details(user_id):
         for property, value in verified_data.items():
             setattr(user, property, value)
 
-        commit_to_database(user)
+        db.session.add(user)
+        db.session.commit()
+        db.session.refresh(user)
+
+        profile = db.session.execute(db.select(StaffProfile).where(StaffProfile.user_id == user_id)).scalar_one_or_none()
+        if profile is None:
+            return jsonify({
+                "code": "invalid_profile",
+                "message": "The profile requested was not found"
+            }), 404
     except SQLAlchemyError as e:
         return database_error_response(e)
 
-    return jsonify(user_to_dictionary(user)), 201
+    return jsonify(return_user_details(user, profile)), 201
+
+@app.route("/api/v1/workforce/users/<uuid:user_id>/profile", methods=["PATCH"])
+def update_user_profile(user_id):
+    data = request.get_json()
+    verified_data, error = validate_user_payload(data, mode="update_profile")
+
+    if error:
+        return jsonify({
+            "code": "invalid_request",
+            "message": str(error)
+        }), 400
+
+    try:
+        query = db.select(StaffProfile).where(StaffProfile.user_id == user_id)
+        profile = db.session.execute(query).scalar_one_or_none()
+
+        if profile is None:
+            return jsonify({
+                "code": "invalid_profile",
+                "message": "The profile requested was not found"
+            }), 404
+
+        for property, value in verified_data.items():
+            setattr(profile, property, value)
+
+        db.session.add(profile)
+        db.session.commit()
+        db.session.refresh(profile)
+
+        user = db.session.get(User, user_id)
+        if user is None:
+            return jsonify({
+                "code": "user_unavailable",
+                "message": "The requested user is not available"
+            }), 404
+    except SQLAlchemyError as e:
+        return database_error_response(e)
+
+    return jsonify(return_user_details(user, profile)), 201
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

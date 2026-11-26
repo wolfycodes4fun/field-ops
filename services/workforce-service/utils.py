@@ -8,7 +8,7 @@ import jwt
 import os
 
 from extensions import db
-from models import User
+from models import User, StaffProfile
 
 EDITABLE_FIELDS = {"email", "display_name", "role", "is_active"}
 REQUIRED_FIELDS = {"email", "display_name", "role"}
@@ -77,11 +77,6 @@ def validate_user_payload(data: dict, mode):
 
     return verified_data, None
 
-def commit_to_database(user_obj):
-    db.session.add(user_obj)
-    db.session.commit()
-    db.session.refresh(user_obj)
-
 def database_error_response(e: SQLAlchemyError):
     db.session.rollback()
 
@@ -102,13 +97,15 @@ def database_error_response(e: SQLAlchemyError):
         "message": str(e)
     }), 500
 
-def user_to_dictionary(user: User):
+def return_user_details(user: User, profile: StaffProfile):
     return {
-        "id": str(user.id),
-        "email": user.email,
-        "display_name": user.display_name,
-        "role": user.role,
-        "is_active": user.is_active,
+        "staff_id": profile.id,
+        "full_name": profile.full_name,
+        "job_title": profile.job_title,
+        "team": profile.team,
+        "phone": profile.team,
+        "employee_number": profile.employee_number,
+        "is_active": user.is_active
     }
 
 def grant_token(user: User, current_app):
