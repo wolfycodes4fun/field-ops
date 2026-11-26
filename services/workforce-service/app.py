@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import bcrypt
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
 from dotenv import load_dotenv
@@ -11,7 +11,7 @@ import os
 from models import Workforce
 from extensions import db, migrate
 from utils import (
-    hash_password, 
+    hash_and_check_password_constraints, 
     validate_user_payload, 
     commit_to_database, 
     database_error_response, 
@@ -43,7 +43,7 @@ def health():
     try:
         db.session.execute(db.text("SELECT 1"))
         db_status = "connected"
-    except Exception as e:
+    except Exception:
         return jsonify({
             "service status": "healthy",
             "service": "workforce-service",
@@ -59,20 +59,26 @@ def health():
     }), 200
 
 @app.route("/api/v1/workforce/users", methods=["POST"])
-@require_roles("Admin")
+@require_roles("administrator")
 def create_user():
     data = request.get_json()
 
     # Validate data & hash password
-    if data["password"]:
-        data["password_hash"] = hash_password(data["password"])
-    verified_data, error = validate_user_payload(data)
+    password = data.pop("password", None)
+    data["password_hash"], password_err = hash_and_check_password_constraints(password)
+    if password_err:
+        return jsonify({
+            "code": "invalid_request",
+            "message": password_err
+        }), 400
 
+    verified_data, error = validate_user_payload(data)
     if error:
         return jsonify({
             "code": "invalid_object",
             "message": str(error)
         }), 400
+    print(verified_data)
 
     # Unpacks payload to a Workforce object
     user = Workforce(**verified_data)
@@ -158,7 +164,7 @@ def whoami():
         return database_error_response(e)
 
 @app.route("/api/v1/workforce/users", methods=["GET"])
-@require_roles("Admin", "Manager")
+@require_roles("administrator", "manager")
 def search_and_filter_users():
     try:
         limit = int(request.args.get("limit", 20))
@@ -167,6 +173,12 @@ def search_and_filter_users():
         return jsonify({
             "code": "invalid_request",
             "message": "Please pass limit & offset as integers"
+        }), 400
+
+    if not 1 <= limit <= 100 or offset < 0:
+        return jsonify({
+            "code": "invalid_request",
+            "message": "Please pass limit between 0 and 100, offset must be greater than or equal to 0"
         }), 400
 
     try:
@@ -194,7 +206,6 @@ def search_and_filter_users():
             }), 400
         if match_email_or_name:
             pattern = f"%{match_email_or_name.strip()}%"
-            print("lol" + pattern)
             stmt = stmt.where(or_(
                 Workforce.display_name.ilike(pattern),
                 Workforce.email.ilike(pattern)
@@ -214,21 +225,25 @@ def search_and_filter_users():
                 }), 400
             stmt = stmt.where(Workforce.is_active == (active.lower() == "true"))
 
-        stmt = stmt.order_by(Workforce.id.asc())
+        stmt = stmt.order_by(Workforce.id.asc()).limit(limit).offset(offset)
         users = db.session.execute(stmt).scalars()
 
         return jsonify({
             "users": [
                 {"id": user.id, "name": user.display_name, "email": user.email, "role": user.role, "created_at": user.created_at}
                 for user in users
-            ]
+            ],
+            "pagination": {
+                "limit": limit,
+                "offset": offset
+            }
         }), 200
 
     except SQLAlchemyError as e:
         return database_error_response(e)
 
 @app.route("/api/v1/workforce/users/<uuid:user_id>", methods=["GET"])
-@require_roles("Admin", "Manager")
+@require_roles("administrator", "manager")
 def view_user(user_id):
     try:
         user: Workforce = db.session.get(Workforce, user_id)
@@ -251,7 +266,7 @@ def view_user(user_id):
     })
 
 @app.route("/api/v1/workforce/users/<uuid:user_id>", methods=["PATCH"])
-@require_roles("Admin")
+@require_roles("administrator")
 def update_user_details(user_id):
     data = request.get_json()
     verified_data, error = validate_user_payload(data, True)
