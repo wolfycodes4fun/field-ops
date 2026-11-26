@@ -8,7 +8,7 @@ import jwt
 import os
 
 from extensions import db
-from models import Workforce
+from models import User, StaffProfile
 
 EDITABLE_FIELDS = {"email", "display_name", "role", "is_active"}
 REQUIRED_FIELDS = {"email", "display_name", "role"}
@@ -30,39 +30,52 @@ def hash_and_check_password_constraints(password):
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8'), None
 
-def validate_user_payload(data: dict, is_update: bool = False):
+def validate_user_payload(data: dict, mode):
+    REQUIRED_USER_FIELDS = {"email", "display_name", "role", "password_hash", "profile"}
+    EDITABLE_USER_FIELDS = {"email", "display_name", "role", "is_active"}
+    REQUIRED_PROFILE_FIELDS = {"full_name", "job_title", "employee_number"}
+    PROFILE_FIELDS = {"full_name", "job_title", "team", "phone", "employee_number"}
+
     if not isinstance(data, dict):
-        return None, "Request body must be a JSON object"
+        return None, "The payload must be a JSON object :("
 
-    if not is_update:
-        missing_fields = list(REQUIRED_FIELDS - set(data.keys()))
-        if missing_fields:
-            return None, f"Required fields for creating users missing: {", ".join(missing_fields)}"
+    match mode:
+        case "create":
+            missing_user_fields = REQUIRED_USER_FIELDS - set(data.keys())
+            if missing_user_fields:
+                return None, f"To create a user, please pass the fields ({", ".join(missing_user_fields)})"
+            missing_profile_fields = REQUIRED_PROFILE_FIELDS - set(data.get("profile").keys())
+            if missing_profile_fields:
+                return None, f"To create a user, please pass the fields ({", ".join(missing_profile_fields)}) under 'profile' attribute"
 
-    if is_update and not data:
-        return  None, f"Provide at least one property from {list(EDITABLE_FIELDS)} to update user"
+        case "update_user":
+            has_overlap = any(property in EDITABLE_USER_FIELDS for property in data)
+            if not has_overlap:
+                return None, f"To update a user, please pass at least one attribute to update from ({", ".join(EDITABLE_USER_FIELDS)})"
+
+        case "update_profile":
+            if not isinstance(data.get("profile"), dict) or not data.get("profile"):
+                return None, f"To update a user profile, please pass the attributes in JSON format :("
+            has_overlap = any(property in PROFILE_FIELDS for property in data.get("profile"))
+            if not has_overlap:
+                return None, f"To update a user profile, please pass at least one attribute from ({", ".join(PROFILE_FIELDS)})"
 
     verified_data = {}
     for property, value in data.items():
-        if property != "is_active" and not isinstance(value, str):
-            return None, f"Value for {property} must be of type string!"
         if property == "is_active" and not isinstance(value, bool):
-            return None, f"Value for {property} must be of type boolean!"
-        if property == "role":
-            verified_data[property] = value.lower()
-        if (property in EDITABLE_FIELDS or
-            property != "role" or
-            property == "password_hash"
-            ):
-
-            verified_data[property] = value
+            return None, f"Attribute {property} not correct data type(Bool) :("
+        elif property == "profile":
+            for profile_property, profile_value in value.items():
+                if not isinstance(profile_value, str) or profile_property not in PROFILE_FIELDS:
+                    return None, f"Attribute under 'profile', {profile_property} is rejected/not correct data type(String) :("
+        elif (
+            property not in (REQUIRED_USER_FIELDS | EDITABLE_USER_FIELDS) or
+            not isinstance(value, str)
+        ):
+            return None, f"Attribute {property} is rejected/not correct data type(String) :("
+        verified_data[property] = value
 
     return verified_data, None
-
-def commit_to_database(workforce_obj):
-    db.session.add(workforce_obj)
-    db.session.commit()
-    db.session.refresh(workforce_obj)
 
 def database_error_response(e: SQLAlchemyError):
     db.session.rollback()
@@ -84,16 +97,18 @@ def database_error_response(e: SQLAlchemyError):
         "message": str(e)
     }), 500
 
-def user_to_dictionary(user: Workforce):
+def return_user_details(user: User, profile: StaffProfile):
     return {
-        "id": str(user.id),
-        "email": user.email,
-        "display_name": user.display_name,
-        "role": user.role,
-        "is_active": user.is_active,
+        "staff_id": profile.id,
+        "full_name": profile.full_name,
+        "job_title": profile.job_title,
+        "team": profile.team,
+        "phone": profile.team,
+        "employee_number": profile.employee_number,
+        "is_active": user.is_active
     }
 
-def grant_token(user: Workforce, current_app):
+def grant_token(user: User, current_app):
     token = jwt.encode(
         {
             "sub": str(user.id),
@@ -142,7 +157,7 @@ def require_roles(*allowed_roles: str):
             user_id = jwt_token.get("sub")
 
             try:
-                user = db.session.get(Workforce, user_id)
+                user = db.session.get(User, user_id)
             except SQLAlchemyError as e:
                 return database_error_response(e)
 
