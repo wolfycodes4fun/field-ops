@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import bcrypt
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
 from dotenv import load_dotenv
@@ -43,7 +43,7 @@ def health():
     try:
         db.session.execute(db.text("SELECT 1"))
         db_status = "connected"
-    except Exception as e:
+    except Exception:
         return jsonify({
             "service status": "healthy",
             "service": "workforce-service",
@@ -175,6 +175,12 @@ def search_and_filter_users():
             "message": "Please pass limit & offset as integers"
         }), 400
 
+    if not 1 <= limit <= 100 or offset < 0:
+        return jsonify({
+            "code": "invalid_request",
+            "message": "Please pass limit between 0 and 100, offset must be greater than or equal to 0"
+        }), 400
+
     try:
         stmt = db.select(Workforce)
 
@@ -219,14 +225,18 @@ def search_and_filter_users():
                 }), 400
             stmt = stmt.where(Workforce.is_active == (active.lower() == "true"))
 
-        stmt = stmt.order_by(Workforce.id.asc())
+        stmt = stmt.order_by(Workforce.id.asc()).limit(limit).offset(offset)
         users = db.session.execute(stmt).scalars()
 
         return jsonify({
             "users": [
                 {"id": user.id, "name": user.display_name, "email": user.email, "role": user.role, "created_at": user.created_at}
                 for user in users
-            ]
+            ],
+            "pagination": {
+                "limit": limit,
+                "offset": offset
+            }
         }), 200
 
     except SQLAlchemyError as e:
