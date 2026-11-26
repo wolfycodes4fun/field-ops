@@ -8,7 +8,7 @@ import jwt
 import os
 
 from extensions import db
-from models import Workforce
+from models import User
 
 EDITABLE_FIELDS = {"email", "display_name", "role", "is_active"}
 REQUIRED_FIELDS = {"email", "display_name", "role"}
@@ -59,10 +59,10 @@ def validate_user_payload(data: dict, is_update: bool = False):
 
     return verified_data, None
 
-def commit_to_database(workforce_obj):
-    db.session.add(workforce_obj)
+def commit_to_database(user_obj):
+    db.session.add(user_obj)
     db.session.commit()
-    db.session.refresh(workforce_obj)
+    db.session.refresh(user_obj)
 
 def database_error_response(e: SQLAlchemyError):
     db.session.rollback()
@@ -84,7 +84,7 @@ def database_error_response(e: SQLAlchemyError):
         "message": str(e)
     }), 500
 
-def user_to_dictionary(user: Workforce):
+def user_to_dictionary(user: User):
     return {
         "id": str(user.id),
         "email": user.email,
@@ -93,7 +93,7 @@ def user_to_dictionary(user: Workforce):
         "is_active": user.is_active,
     }
 
-def grant_token(user: Workforce, current_app):
+def grant_token(user: User, current_app):
     token = jwt.encode(
         {
             "sub": str(user.id),
@@ -142,7 +142,7 @@ def require_roles(*allowed_roles: str):
             user_id = jwt_token.get("sub")
 
             try:
-                user = db.session.get(Workforce, user_id)
+                user = db.session.get(User, user_id)
             except SQLAlchemyError as e:
                 return database_error_response(e)
 

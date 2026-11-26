@@ -11,8 +11,8 @@ import uuid
 
 from extensions import db
 
-class Workforce(db.Model):
-    __tablename__ = "workforces"
+class User(db.Model):
+    __tablename__ = "users"
     __table_args__ = (
         CheckConstraint(
             "role IN ('administrator', 'manager', 'technician')",

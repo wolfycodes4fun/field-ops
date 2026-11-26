@@ -1,14 +1,14 @@
 from flask import Flask, request, jsonify, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import bcrypt
-from sqlalchemy import select, or_, func
+from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
 from dotenv import load_dotenv
 
 import os
 
-from models import Workforce
+from models import User
 from extensions import db, migrate
 from utils import (
     hash_and_check_password_constraints, 
@@ -58,6 +58,36 @@ def health():
         "database status": db_status
     }), 200
 
+@app.route("/api/v1/workforce/sudousers", methods=["POST"])
+def create_sudo_users():
+    # A temp API route to add the initial admin & manager user/s
+    data = request.get_json()
+
+    password = data.pop("password", None)
+    data["password_hash"], password_err = hash_and_check_password_constraints(password)
+    if password_err:
+        return jsonify({
+            "code": "invalid_request",
+            "message": password_err
+        }), 400
+    
+    verified_data, error = validate_user_payload(data)
+    if error:
+        return jsonify({
+            "code": "invalid_object",
+            "message": str(error)
+        }), 400
+    print(verified_data)
+    
+    user = User(**verified_data)
+    try:
+        commit_to_database(user)
+    except SQLAlchemyError as e:
+        return database_error_response(e)
+    
+    return jsonify(user_to_dictionary(user)), 201
+    
+
 @app.route("/api/v1/workforce/users", methods=["POST"])
 @require_roles("administrator")
 def create_user():
@@ -80,8 +110,8 @@ def create_user():
         }), 400
     print(verified_data)
 
-    # Unpacks payload to a Workforce object
-    user = Workforce(**verified_data)
+    # Unpacks payload to a User object
+    user = User(**verified_data)
     try:
         commit_to_database(user)
     except SQLAlchemyError as e:
@@ -109,8 +139,8 @@ def user_login():
         }), 400
 
     try:
-        query = db.select(Workforce).where(Workforce.email == email)
-        user: Workforce = db.session.execute(query).scalar_one_or_none()
+        query = db.select(User).where(User.email == email)
+        user: User = db.session.execute(query).scalar_one_or_none()
     except SQLAlchemyError as e:
         return database_error_response(e)
 
@@ -147,7 +177,7 @@ def whoami():
     user_id = jwt_token.get("sub")
 
     try:
-        user = db.session.get(Workforce, user_id)
+        user = db.session.get(User, user_id)
         if user is not None and user.is_active:
             return jsonify({
                 "id": user.id,
@@ -182,7 +212,7 @@ def search_and_filter_users():
         }), 400
 
     try:
-        stmt = db.select(Workforce)
+        stmt = db.select(User)
 
         role = (request.args.get("role") or "")
         if role:
@@ -196,7 +226,7 @@ def search_and_filter_users():
                     "code": "invalid_request",
                     "message": "role must be filtered with 'Admin', 'Manager' or 'Technician'"
                 }), 400
-            stmt = stmt.where(Workforce.role == role.strip())
+            stmt = stmt.where(User.role == role.strip())
 
         match_email_or_name = request.args.get("name_or_email_pattern", "")
         if not isinstance(match_email_or_name, str):
@@ -207,8 +237,8 @@ def search_and_filter_users():
         if match_email_or_name:
             pattern = f"%{match_email_or_name.strip()}%"
             stmt = stmt.where(or_(
-                Workforce.display_name.ilike(pattern),
-                Workforce.email.ilike(pattern)
+                User.display_name.ilike(pattern),
+                User.email.ilike(pattern)
             ))
 
         active = request.args.get("is_active")
@@ -223,9 +253,9 @@ def search_and_filter_users():
                     "code": "invalid_request",
                     "message": "activity status must be filtered with either 'true' or 'false'"
                 }), 400
-            stmt = stmt.where(Workforce.is_active == (active.lower() == "true"))
+            stmt = stmt.where(User.is_active == (active.lower() == "true"))
 
-        stmt = stmt.order_by(Workforce.id.asc()).limit(limit).offset(offset)
+        stmt = stmt.order_by(User.id.asc()).limit(limit).offset(offset)
         users = db.session.execute(stmt).scalars()
 
         return jsonify({
@@ -246,7 +276,7 @@ def search_and_filter_users():
 @require_roles("administrator", "manager")
 def view_user(user_id):
     try:
-        user: Workforce = db.session.get(Workforce, user_id)
+        user: User = db.session.get(User, user_id)
     except SQLAlchemyError as e:
         return database_error_response(e)
 
@@ -278,7 +308,7 @@ def update_user_details(user_id):
         }), 400
 
     try:
-        user = db.session.get(Workforce, user_id)
+        user = db.session.get(User, user_id)
         if user is None:
             return jsonify({
                 "code": "user_unavailable",
