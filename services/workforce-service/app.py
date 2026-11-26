@@ -71,7 +71,7 @@ def create_sudo_users():
             "message": password_err
         }), 400
     
-    verified_data, error = validate_user_payload(data)
+    verified_data, error = validate_user_payload(data, mode="create")
     if error:
         return jsonify({
             "code": "invalid_object",
@@ -102,7 +102,7 @@ def create_user():
             "message": password_err
         }), 400
 
-    verified_data, error = validate_user_payload(data)
+    verified_data, error = validate_user_payload(data, mode="create")
     if error:
         return jsonify({
             "code": "invalid_object",
@@ -299,7 +299,7 @@ def view_user(user_id):
 @require_roles("administrator")
 def update_user_details(user_id):
     data = request.get_json()
-    verified_data, error = validate_user_payload(data, True)
+    verified_data, error = validate_user_payload(data, mode="update_user")
 
     if error:
         return jsonify({
